@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 
 // =================================================================================
-// SUAS CHAVES DO FIREBASE (JÁ CONFIGURADAS)
+// ⬇️ SUAS CHAVES DO FIREBASE (CONFIGURADAS) ⬇️
 // =================================================================================
 
 const firebaseConfig = {
@@ -181,7 +181,7 @@ const ManagerEmployees = () => {
               <tr key={f.id} className="hover:bg-slate-50">
                 <td className="p-3 font-bold text-slate-700">{f.nome}</td>
                 <td className="p-3"><span className="bg-blue-50 text-blue-700 px-2 py-1 rounded text-xs font-bold border border-blue-100">{f.escala || '5x2'}</span></td>
-                <td className="p-3 text-slate-600 font-mono text-xs">{f.entrada}-{f.saida}</td>
+                <td className="p-3 text-slate-600 font-mono text-xs">{f.entrada}-{f.saida}{f.escala === '12x36' ? ' (Plantão)' : ` | ${f.entradaSexta}-${f.saidaSexta}`}</td>
                 <td className="p-3 text-right"><button onClick={()=>handleExcluir(f.id)} className="text-red-500 hover:bg-red-50 p-2 rounded transition"><Trash2 size={16}/></button></td>
               </tr>
             ))}
@@ -582,8 +582,4 @@ const App = () => {
   return <EmployeeApp onGoToManager={() => setView('manager-login')} />;
 };
 
-const root = createRoot(document.getElementById('root'));
-root.render(<App />);
-
-
-Agora é só dar **Commit changes** neste último arquivo! Depois disso, você vai no Netlify, clica em "New Site from Git", escolhe esse repositório e clica em **Deploy**. Vai funcionar perfeitamente!
+export default App;
