@@ -30,7 +30,7 @@ const firebaseConfig = {
   apiKey: "AIzaSyArgWJbEegj_yoPRAjyJWnPwG5kfRb1ioA",
   authDomain: "sistema-ponto-rh.firebaseapp.com",
   projectId: "sistema-ponto-rh",
-  storageBucket: "sistemapontorh.firebasestorage.app", // Ajustado conforme seu código
+  storageBucket: "sistemapontorh.firebasestorage.app",
   messagingSenderId: "638828539578",
   appId: "1:638828539578:web:d1aa3e58e66b8d2236dc83"
 };
@@ -45,14 +45,18 @@ const COLLECTION_REGISTROS = "registros_ponto";
 const COLLECTION_FUNCIONARIOS = "funcionarios";
 
 // --- UTILITÁRIOS ---
-const formatTime = (dateObj) => dateObj ? dateObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '---';
+const formatTime = (dateObj) => 
+  dateObj ? dateObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '---';
+
 const decimalToTime = (decimal) => {
+  if (!decimal || isNaN(decimal)) return '00:00';
   const sign = decimal < 0 ? "-" : "+";
   const absDecimal = Math.abs(decimal);
   const hours = Math.floor(absDecimal);
   const minutes = Math.round((absDecimal - hours) * 60);
   return `${sign}${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
 };
+
 const timeToDecimal = (timeStr) => {
   if(!timeStr) return 0;
   const [h, m] = timeStr.split(':').map(Number);
@@ -81,6 +85,7 @@ const PrintStyles = () => (
 const ManagerLogin = ({ onLogin, onBack }) => {
   const [pass, setPass] = useState('');
   const [error, setError] = useState('');
+
   const handleLogin = (e) => {
     e.preventDefault();
     if (pass === 'admin123') onLogin();
@@ -91,14 +96,36 @@ const ManagerLogin = ({ onLogin, onBack }) => {
     <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 no-print">
       <div className="bg-white rounded-2xl p-8 w-full max-w-md shadow-2xl">
         <div className="text-center mb-8">
-          <div className="bg-blue-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"><Shield className="w-8 h-8 text-blue-600"/></div>
+          <div className="bg-blue-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Shield className="w-8 h-8 text-blue-600"/>
+          </div>
           <h2 className="text-2xl font-bold text-slate-800">Acesso Restrito</h2>
+          <p className="text-slate-500 text-sm mt-1">
+            Área exclusiva para gestão de ponto e RH.
+          </p>
         </div>
         <form onSubmit={handleLogin} className="space-y-4">
-          <input type="password" value={pass} onChange={e=>setPass(e.target.value)} className="w-full border p-3 rounded-lg" placeholder="Senha..."/>
+          <input
+            type="password"
+            value={pass}
+            onChange={e=>setPass(e.target.value)}
+            className="w-full border p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="Senha do gestor..."
+          />
           {error && <p className="text-red-500 text-sm">{error}</p>}
-          <button type="submit" className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold">Entrar</button>
-          <button type="button" onClick={onBack} className="w-full text-slate-500 text-sm py-2">Voltar para o App</button>
+          <button
+            type="submit"
+            className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition"
+          >
+            Entrar
+          </button>
+          <button
+            type="button"
+            onClick={onBack}
+            className="w-full text-slate-500 text-sm py-2 hover:text-slate-700"
+          >
+            Voltar para o App do Funcionário
+          </button>
         </form>
       </div>
     </div>
@@ -109,140 +136,411 @@ const ManagerLogin = ({ onLogin, onBack }) => {
 const ManagerEmployees = () => {
   const [funcionarios, setFuncionarios] = useState([]);
   const [novoFunc, setNovoFunc] = useState({
-    nome: '', escala: '5x2', entrada: '08:00', saidaAlmoco: '12:00', voltaAlmoco: '13:00', saida: '18:00',
+    nome: '', escala: '5x2',
+    entrada: '08:00', saidaAlmoco: '12:00', voltaAlmoco: '13:00', saida: '18:00',
     entradaSexta: '08:00', saidaAlmocoSexta: '12:00', voltaAlmocoSexta: '13:00', saidaSexta: '17:00'
   });
   const [editingFunc, setEditingFunc] = useState(null);
 
   useEffect(() => {
     const q = query(collection(db, COLLECTION_FUNCIONARIOS), orderBy('nome'));
-    return onSnapshot(q, (snap) => setFuncionarios(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+    return onSnapshot(q, (snap) => 
+      setFuncionarios(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+    );
   }, []);
 
+  const handleChangeNovo = (field, value) => {
+    setNovoFunc(prev => ({ ...prev, [field]: value }));
+  };
+
   const handleSalvar = async () => {
-    if (!novoFunc.nome) return alert("Preencha o nome");
+    if (!novoFunc.nome.trim()) {
+      alert("Preencha o nome do funcionário");
+      return;
+    }
     await addDoc(collection(db, COLLECTION_FUNCIONARIOS), novoFunc);
-    setNovoFunc({ ...novoFunc, nome: '' }); 
+    setNovoFunc(prev => ({ ...prev, nome: '' }));
   };
 
   const handleExcluir = async (id) => {
-    if (confirm("Excluir funcionário?")) await deleteDoc(doc(db, COLLECTION_FUNCIONARIOS, id));
+    if (confirm("Excluir funcionário? Isso não apaga o histórico de ponto.")) {
+      await deleteDoc(doc(db, COLLECTION_FUNCIONARIOS, id));
+    }
   };
 
   const handleOpenEdit = (func) => {
     setEditingFunc({ ...func });
   };
-  
-  const handleSalvarEdicao = async () => {
-    if (!editingFunc || !editingFunc.id) return;
-    try {
-       await updateDoc(doc(db, COLLECTION_FUNCIONARIOS, editingFunc.id), {
-         ...editingFunc
-       });
-       setEditingFunc(null);
-    } catch (e) { alert("Erro ao salvar: " + e.message); }
+
+  const handleEditChange = (field, value) => {
+    setEditingFunc(prev => ({ ...prev, [field]: value }));
   };
 
-  const calcularHorasSemanais = (f) => {
-    const base = f || novoFunc;
-    const calcDia = (e, sa, va, s) => { const total = (timeToDecimal(sa) - timeToDecimal(e)) + (timeToDecimal(s) - timeToDecimal(va)); return total > 0 ? total : 0; };
+  const handleSalvarEdicao = async () => {
+    if (!editingFunc || !editingFunc.id) return;
+    await updateDoc(doc(db, COLLECTION_FUNCIONARIOS, editingFunc.id), {
+      ...editingFunc
+    });
+    setEditingFunc(null);
+  };
+
+  const calcularHorasSemanais = (cfg) => {
+    const base = cfg || novoFunc;
+    const calcDia = (e, sa, va, s) => {
+      const total = (timeToDecimal(sa) - timeToDecimal(e)) + (timeToDecimal(s) - timeToDecimal(va));
+      return total > 0 ? total : 0;
+    };
     const horasPadrao = calcDia(base.entrada, base.saidaAlmoco, base.voltaAlmoco, base.saida);
-    if (base.escala === '5x2') return (horasPadrao * 4) + calcDia(base.entradaSexta, base.saidaAlmocoSexta, base.voltaAlmocoSexta, base.saidaSexta);
-    if (base.escala === '6x1') return (horasPadrao * 5) + calcDia(base.entradaSexta, base.saidaAlmocoSexta, base.voltaAlmocoSexta, base.saidaSexta);
+
+    if (base.escala === '5x2') {
+      return (horasPadrao * 4) + calcDia(base.entradaSexta, base.saidaAlmocoSexta, base.voltaAlmocoSexta, base.saidaSexta);
+    }
+    if (base.escala === '6x1') {
+      return (horasPadrao * 5) + calcDia(base.entradaSexta, base.saidaAlmocoSexta, base.voltaAlmocoSexta, base.saidaSexta);
+    }
+    // 12x36: média de 3,5 dias
     return horasPadrao * 3.5;
   };
 
-  const horasSemanais = calcularHorasSemanais(novoFunc);
+  const horasSemanais = calcularHorasSemanais();
+  const diff44 = horasSemanais - 44;
+  const horasBadgeClass = (() => {
+    const abs = Math.abs(diff44);
+    if (abs < 0.6) return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+    if (horasSemanais > 44) return 'bg-amber-100 text-amber-700 border-amber-200';
+    return 'bg-slate-100 text-slate-700 border-slate-200';
+  })();
 
   return (
     <div className="space-y-6 no-print">
+      {/* CARD NOVO CADASTRO */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
         <div className="flex justify-between items-center mb-4">
-           <h3 className="font-bold text-slate-700 flex items-center gap-2"><Plus size={18}/> Novo Cadastro</h3>
-           <div className={`text-xs px-3 py-1 rounded-full border ${Math.abs(horasSemanais - 44) < 0.5 ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-700 border-slate-200'}`}>Est.: <strong>{decimalToTime(horasSemanais)}h</strong></div>
+          <h3 className="font-bold text-slate-700 flex items-center gap-2">
+            <Plus size={18}/> Novo Cadastro
+          </h3>
+          <div className={`text-xs px-3 py-1 rounded-full border ${horasBadgeClass}`}>
+            Estimativa semanal: <strong>{decimalToTime(horasSemanais)}h</strong>
+          </div>
         </div>
+
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="md:col-span-2"><label className="text-xs font-bold text-slate-500 uppercase">Nome</label><input type="text" value={novoFunc.nome} onChange={e=>setNovoFunc({...novoFunc, nome: e.target.value})} className="w-full border p-2 rounded"/></div>
-            <div><label className="text-xs font-bold text-slate-500 uppercase">Escala</label><select value={novoFunc.escala} onChange={e=>setNovoFunc({...novoFunc, escala: e.target.value})} className="w-full border p-2 rounded bg-white"><option value="5x2">5x2</option><option value="6x1">6x1</option><option value="12x36">12x36</option></select></div>
-          </div>
-          <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
-            <p className="text-xs font-bold text-blue-600 mb-2 uppercase">{novoFunc.escala === '12x36' ? 'Horário Plantão' : 'Padrão'}</p>
-            <div className="grid grid-cols-4 gap-2">
-              <div><label className="text-[10px] text-slate-400">Entrada</label><input type="time" value={novoFunc.entrada} onChange={e=>setNovoFunc({...novoFunc, entrada: e.target.value})} className="w-full border p-1 rounded text-sm"/></div>
-              <div><label className="text-[10px] text-slate-400">Saída Alm</label><input type="time" value={novoFunc.saidaAlmoco} onChange={e=>setNovoFunc({...novoFunc, saidaAlmoco: e.target.value})} className="w-full border p-1 rounded text-sm"/></div>
-              <div><label className="text-[10px] text-slate-400">Volta Alm</label><input type="time" value={novoFunc.voltaAlmoco} onChange={e=>setNovoFunc({...novoFunc, voltaAlmoco: e.target.value})} className="w-full border p-1 rounded text-sm"/></div>
-              <div><label className="text-[10px] text-slate-400">Saída</label><input type="time" value={novoFunc.saida} onChange={e=>setNovoFunc({...novoFunc, saida: e.target.value})} className="w-full border p-1 rounded text-sm"/></div>
+            <div className="md:col-span-2">
+              <label className="text-xs font-bold text-slate-500 uppercase">Nome</label>
+              <input
+                type="text"
+                value={novoFunc.nome}
+                onChange={e=>handleChangeNovo('nome', e.target.value)}
+                className="w-full border p-2 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase">Escala</label>
+              <select
+                value={novoFunc.escala}
+                onChange={e=>handleChangeNovo('escala', e.target.value)}
+                className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                <option value="5x2">5x2</option>
+                <option value="6x1">6x1</option>
+                <option value="12x36">12x36</option>
+              </select>
             </div>
           </div>
+
+          <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
+            <p className="text-xs font-bold text-blue-600 mb-2 uppercase">
+              {novoFunc.escala === '12x36' ? 'Horário Plantão' : 'Horário Padrão'}
+            </p>
+            <div className="grid grid-cols-4 gap-2">
+              <div>
+                <label className="text-[10px] text-slate-400">Entrada</label>
+                <input
+                  type="time"
+                  value={novoFunc.entrada}
+                  onChange={e=>handleChangeNovo('entrada', e.target.value)}
+                  className="w-full border p-1 rounded text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-slate-400">Saída Alm</label>
+                <input
+                  type="time"
+                  value={novoFunc.saidaAlmoco}
+                  onChange={e=>handleChangeNovo('saidaAlmoco', e.target.value)}
+                  className="w-full border p-1 rounded text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-slate-400">Volta Alm</label>
+                <input
+                  type="time"
+                  value={novoFunc.voltaAlmoco}
+                  onChange={e=>handleChangeNovo('voltaAlmoco', e.target.value)}
+                  className="w-full border p-1 rounded text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-slate-400">Saída</label>
+                <input
+                  type="time"
+                  value={novoFunc.saida}
+                  onChange={e=>handleChangeNovo('saida', e.target.value)}
+                  className="w-full border p-1 rounded text-sm"
+                />
+              </div>
+            </div>
+          </div>
+
           {(novoFunc.escala === '5x2' || novoFunc.escala === '6x1') && (
             <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
-              <p className="text-xs font-bold text-emerald-600 mb-2 uppercase">Sexta/Sábado (Reduzido)</p>
+              <p className="text-xs font-bold text-emerald-600 mb-2 uppercase">
+                Sexta/Sábado (Reduzido)
+              </p>
               <div className="grid grid-cols-4 gap-2">
-                <div><label className="text-[10px] text-slate-400">Entrada</label><input type="time" value={novoFunc.entradaSexta} onChange={e=>setNovoFunc({...novoFunc, entradaSexta: e.target.value})} className="w-full border p-1 rounded text-sm"/></div>
-                <div><label className="text-[10px] text-slate-400">Saída Alm</label><input type="time" value={novoFunc.saidaAlmocoSexta} onChange={e=>setNovoFunc({...novoFunc, saidaAlmocoSexta: e.target.value})} className="w-full border p-1 rounded text-sm"/></div>
-                <div><label className="text-[10px] text-slate-400">Volta Alm</label><input type="time" value={novoFunc.voltaAlmocoSexta} onChange={e=>setNovoFunc({...novoFunc, voltaAlmocoSexta: e.target.value})} className="w-full border p-1 rounded text-sm"/></div>
-                <div><label className="text-[10px] text-slate-400">Saída</label><input type="time" value={novoFunc.saidaSexta} onChange={e=>setNovoFunc({...novoFunc, saidaSexta: e.target.value})} className="w-full border p-1 rounded text-sm"/></div>
+                <div>
+                  <label className="text-[10px] text-slate-400">Entrada</label>
+                  <input
+                    type="time"
+                    value={novoFunc.entradaSexta}
+                    onChange={e=>handleChangeNovo('entradaSexta', e.target.value)}
+                    className="w-full border p-1 rounded text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-400">Saída Alm</label>
+                  <input
+                    type="time"
+                    value={novoFunc.saidaAlmocoSexta}
+                    onChange={e=>handleChangeNovo('saidaAlmocoSexta', e.target.value)}
+                    className="w-full border p-1 rounded text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-400">Volta Alm</label>
+                  <input
+                    type="time"
+                    value={novoFunc.voltaAlmocoSexta}
+                    onChange={e=>handleChangeNovo('voltaAlmocoSexta', e.target.value)}
+                    className="w-full border p-1 rounded text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-400">Saída</label>
+                  <input
+                    type="time"
+                    value={novoFunc.saidaSexta}
+                    onChange={e=>handleChangeNovo('saidaSexta', e.target.value)}
+                    className="w-full border p-1 rounded text-sm"
+                  />
+                </div>
               </div>
             </div>
           )}
         </div>
-        <button onClick={handleSalvar} className="mt-4 bg-blue-600 text-white px-6 py-2 rounded-lg font-bold text-sm hover:bg-blue-700 w-full">Salvar Configuração</button>
+
+        <button
+          onClick={handleSalvar}
+          className="mt-4 bg-blue-600 text-white px-6 py-2 rounded-lg font-bold text-sm hover:bg-blue-700 w-full transition"
+        >
+          Salvar Configuração
+        </button>
       </div>
+
+      {/* TABELA FUNCIONÁRIOS */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <table className="w-full text-sm text-left">
-          <thead className="bg-slate-50 text-slate-600 uppercase font-bold text-xs"><tr><th className="p-3">Nome</th><th className="p-3">Escala</th><th className="p-3">Horário</th><th className="p-3 text-right">Ações</th></tr></thead>
+          <thead className="bg-slate-50 text-slate-600 uppercase font-bold text-xs">
+            <tr>
+              <th className="p-3">Nome</th>
+              <th className="p-3">Escala</th>
+              <th className="p-3">Horário</th>
+              <th className="p-3 text-right">Ações</th>
+            </tr>
+          </thead>
           <tbody className="divide-y divide-slate-100">
-            {funcionarios.map(f => (
-              <tr key={f.id} className="hover:bg-slate-50">
-                <td className="p-3 font-bold text-slate-700">{f.nome}</td>
-                <td className="p-3"><span className="bg-blue-50 text-blue-700 px-2 py-1 rounded text-xs font-bold border border-blue-100">{f.escala || '5x2'}</span></td>
-                <td className="p-3 text-slate-600 font-mono text-xs">{f.entrada}-{f.saida}</td>
-                <td className="p-3 text-right flex justify-end gap-2">
-                   <button onClick={()=>handleOpenEdit(f)} className="text-blue-500 hover:bg-blue-50 p-2 rounded transition"><Edit size={16}/></button>
-                   <button onClick={()=>handleExcluir(f.id)} className="text-red-500 hover:bg-red-50 p-2 rounded transition"><Trash2 size={16}/></button>
+            {funcionarios.map(f => {
+              const hSemana = calcularHorasSemanais(f);
+              return (
+                <tr key={f.id} className="hover:bg-slate-50">
+                  <td className="p-3 font-bold text-slate-700 flex flex-col">
+                    <span>{f.nome}</span>
+                    <span className="text-[10px] text-slate-400">
+                      Estimativa semanal: {decimalToTime(hSemana)}h
+                    </span>
+                  </td>
+                  <td className="p-3">
+                    <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded text-xs font-bold border border-blue-100">
+                      {f.escala || '5x2'}
+                    </span>
+                  </td>
+                  <td className="p-3 text-slate-600 font-mono text-xs">
+                    {f.entrada}-{f.saida}
+                    {f.escala === '12x36'
+                      ? ' (Plantão)'
+                      : ` | ${f.entradaSexta}-${f.saidaSexta}`}
+                  </td>
+                  <td className="p-3 text-right space-x-1">
+                    <button
+                      onClick={()=>handleOpenEdit(f)}
+                      className="inline-flex items-center justify-center text-blue-600 hover:bg-blue-50 p-2 rounded transition"
+                      title="Editar"
+                    >
+                      <Edit size={16}/>
+                    </button>
+                    <button
+                      onClick={()=>handleExcluir(f.id)}
+                      className="inline-flex items-center justify-center text-red-500 hover:bg-red-50 p-2 rounded transition"
+                      title="Excluir"
+                    >
+                      <Trash2 size={16}/>
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+            {funcionarios.length === 0 && (
+              <tr>
+                <td colSpan={4} className="p-4 text-center text-slate-400">
+                  Nenhum funcionário cadastrado.
                 </td>
               </tr>
-            ))}
+            )}
           </tbody>
         </table>
       </div>
 
+      {/* MODAL EDITAR FUNCIONÁRIO */}
       {editingFunc && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 no-print">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden">
-             <div className="bg-slate-100 p-4 border-b flex justify-between items-center">
-               <h3 className="font-bold text-slate-800">Editar Funcionário</h3>
-               <button onClick={()=>setEditingFunc(null)}><X size={20} className="text-slate-500"/></button>
-             </div>
-             <div className="p-6 space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="md:col-span-2"><label className="text-xs font-bold text-slate-500 uppercase">Nome</label><input type="text" value={editingFunc.nome} onChange={e=>setEditingFunc({...editingFunc, nome: e.target.value})} className="w-full border p-2 rounded"/></div>
-                  <div><label className="text-xs font-bold text-slate-500 uppercase">Escala</label><select value={editingFunc.escala} onChange={e=>setEditingFunc({...editingFunc, escala: e.target.value})} className="w-full border p-2 rounded bg-white"><option value="5x2">5x2</option><option value="6x1">6x1</option><option value="12x36">12x36</option></select></div>
+            <div className="bg-slate-100 p-4 border-b flex justify-between items-center">
+              <h3 className="font-bold text-slate-800">Editar Funcionário</h3>
+              <button onClick={()=>setEditingFunc(null)}>
+                <X size={20} className="text-slate-500"/>
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="md:col-span-2">
+                  <label className="text-xs font-bold text-slate-500 uppercase">Nome</label>
+                  <input
+                    type="text"
+                    value={editingFunc.nome}
+                    onChange={e=>handleEditChange('nome', e.target.value)}
+                    className="w-full border p-2 rounded"
+                  />
                 </div>
-                {/* Form Edit */}
-                 <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
-                  <p className="text-xs font-bold text-blue-600 mb-2 uppercase">Padrão</p>
-                  <div className="grid grid-cols-4 gap-2">
-                    <div><label className="text-[10px] text-slate-400">Entrada</label><input type="time" value={editingFunc.entrada} onChange={e=>setEditingFunc({...editingFunc, entrada: e.target.value})} className="w-full border p-1 rounded text-sm"/></div>
-                    <div><label className="text-[10px] text-slate-400">Saída Alm</label><input type="time" value={editingFunc.saidaAlmoco} onChange={e=>setEditingFunc({...editingFunc, saidaAlmoco: e.target.value})} className="w-full border p-1 rounded text-sm"/></div>
-                    <div><label className="text-[10px] text-slate-400">Volta Alm</label><input type="time" value={editingFunc.voltaAlmoco} onChange={e=>setEditingFunc({...editingFunc, voltaAlmoco: e.target.value})} className="w-full border p-1 rounded text-sm"/></div>
-                    <div><label className="text-[10px] text-slate-400">Saída</label><input type="time" value={editingFunc.saida} onChange={e=>setEditingFunc({...editingFunc, saida: e.target.value})} className="w-full border p-1 rounded text-sm"/></div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase">Escala</label>
+                  <select
+                    value={editingFunc.escala}
+                    onChange={e=>handleEditChange('escala', e.target.value)}
+                    className="w-full border p-2 rounded bg-white"
+                  >
+                    <option value="5x2">5x2</option>
+                    <option value="6x1">6x1</option>
+                    <option value="12x36">12x36</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="p-3 bg-slate-50 rounded-lg border border-slate-100 space-y-2">
+                <p className="text-xs font-bold text-blue-600 mb-1 uppercase">Horário padrão</p>
+                <div className="grid grid-cols-4 gap-2">
+                  <div>
+                    <label className="text-[10px] text-slate-400">Entrada</label>
+                    <input
+                      type="time"
+                      value={editingFunc.entrada}
+                      onChange={e=>handleEditChange('entrada', e.target.value)}
+                      className="w-full border p-1 rounded text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-400">Saída Alm</label>
+                    <input
+                      type="time"
+                      value={editingFunc.saidaAlmoco}
+                      onChange={e=>handleEditChange('saidaAlmoco', e.target.value)}
+                      className="w-full border p-1 rounded text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-400">Volta Alm</label>
+                    <input
+                      type="time"
+                      value={editingFunc.voltaAlmoco}
+                      onChange={e=>handleEditChange('voltaAlmoco', e.target.value)}
+                      className="w-full border p-1 rounded text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-400">Saída</label>
+                    <input
+                      type="time"
+                      value={editingFunc.saida}
+                      onChange={e=>handleEditChange('saida', e.target.value)}
+                      className="w-full border p-1 rounded text-sm"
+                    />
                   </div>
                 </div>
-                {(editingFunc.escala === '5x2' || editingFunc.escala === '6x1') && (
-                  <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
-                    <p className="text-xs font-bold text-emerald-600 mb-2 uppercase">Reduzido</p>
-                    <div className="grid grid-cols-4 gap-2">
-                      <div><label className="text-[10px] text-slate-400">Entrada</label><input type="time" value={editingFunc.entradaSexta} onChange={e=>setEditingFunc({...editingFunc, entradaSexta: e.target.value})} className="w-full border p-1 rounded text-sm"/></div>
-                      <div><label className="text-[10px] text-slate-400">Saída Alm</label><input type="time" value={editingFunc.saidaAlmocoSexta} onChange={e=>setEditingFunc({...editingFunc, saidaAlmocoSexta: e.target.value})} className="w-full border p-1 rounded text-sm"/></div>
-                      <div><label className="text-[10px] text-slate-400">Volta Alm</label><input type="time" value={editingFunc.voltaAlmocoSexta} onChange={e=>setEditingFunc({...editingFunc, voltaAlmocoSexta: e.target.value})} className="w-full border p-1 rounded text-sm"/></div>
-                      <div><label className="text-[10px] text-slate-400">Saída</label><input type="time" value={editingFunc.saidaSexta} onChange={e=>setEditingFunc({...editingFunc, saidaSexta: e.target.value})} className="w-full border p-1 rounded text-sm"/></div>
+              </div>
+
+              {(editingFunc.escala === '5x2' || editingFunc.escala === '6x1') && (
+                <div className="p-3 bg-slate-50 rounded-lg border border-slate-100 space-y-2">
+                  <p className="text-xs font-bold text-emerald-600 mb-1 uppercase">
+                    Sexta/Sábado (Reduzido)
+                  </p>
+                  <div className="grid grid-cols-4 gap-2">
+                    <div>
+                      <label className="text-[10px] text-slate-400">Entrada</label>
+                      <input
+                        type="time"
+                        value={editingFunc.entradaSexta}
+                        onChange={e=>handleEditChange('entradaSexta', e.target.value)}
+                        className="w-full border p-1 rounded text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-400">Saída Alm</label>
+                      <input
+                        type="time"
+                        value={editingFunc.saidaAlmocoSexta}
+                        onChange={e=>handleEditChange('saidaAlmocoSexta', e.target.value)}
+                        className="w-full border p-1 rounded text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-400">Volta Alm</label>
+                      <input
+                        type="time"
+                        value={editingFunc.voltaAlmocoSexta}
+                        onChange={e=>handleEditChange('voltaAlmocoSexta', e.target.value)}
+                        className="w-full border p-1 rounded text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-400">Saída</label>
+                      <input
+                        type="time"
+                        value={editingFunc.saidaSexta}
+                        onChange={e=>handleEditChange('saidaSexta', e.target.value)}
+                        className="w-full border p-1 rounded text-sm"
+                      />
                     </div>
                   </div>
-                )}
-                <button onClick={handleSalvarEdicao} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition">Salvar Alterações</button>
-             </div>
+                </div>
+              )}
+
+              <button
+                onClick={handleSalvarEdicao}
+                className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition"
+              >
+                Salvar Alterações
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -254,55 +552,136 @@ const ManagerEmployees = () => {
 const ManagerAbsences = ({ registros }) => {
   const [modalAbono, setModalAbono] = useState(null);
   const [horasAbono, setHorasAbono] = useState("08:00");
-  const ausenciasPendentes = registros.filter(r => r.action === 'ausencia' && r.status === 'Pendente');
+
+  const ausenciasPendentes = registros.filter(
+    r => r.action === 'ausencia' && r.status === 'Pendente'
+  );
 
   const handleAprovar = async () => {
     if(!modalAbono) return;
-    await updateDoc(doc(db, COLLECTION_REGISTROS, modalAbono), { status: 'Aprovado', horasAbonadas: horasAbono });
+    await updateDoc(doc(db, COLLECTION_REGISTROS, modalAbono), {
+      status: 'Aprovado',
+      horasAbonadas: horasAbono
+    });
     setModalAbono(null);
   };
+
   const handleRejeitar = async (id) => {
-    if(confirm("Rejeitar?")) await updateDoc(doc(db, COLLECTION_REGISTROS, id), { status: 'Rejeitado' });
+    if(confirm("Rejeitar justificativa?")) {
+      await updateDoc(doc(db, COLLECTION_REGISTROS, id), { status: 'Rejeitado' });
+    }
   };
 
   return (
     <div className="space-y-6 no-print">
       <div className="flex items-center justify-between">
-        <h3 className="font-bold text-slate-700 text-lg flex items-center gap-2"><AlertTriangle size={18} className="text-amber-500"/> Justificativas Pendentes</h3>
-        {ausenciasPendentes.length > 0 && <span className="text-xs bg-amber-100 text-amber-700 px-3 py-1 rounded-full">{ausenciasPendentes.length} pendente(s)</span>}
+        <h3 className="font-bold text-slate-700 text-lg flex items-center gap-2">
+          <AlertTriangle size={18} className="text-amber-500"/>
+          Justificativas Pendentes
+        </h3>
+        {ausenciasPendentes.length > 0 && (
+          <span className="text-xs bg-amber-100 text-amber-700 px-3 py-1 rounded-full">
+            {ausenciasPendentes.length} pendente(s)
+          </span>
+        )}
       </div>
       
       {ausenciasPendentes.length === 0 ? (
-        <div className="text-center p-8 text-slate-400 bg-white rounded-xl border border-dashed border-slate-300">Nenhuma justificativa pendente no momento.</div>
+        <div className="text-center p-8 text-slate-400 bg-white rounded-xl border border-dashed border-slate-300">
+          Nenhuma justificativa pendente no momento.
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {ausenciasPendentes.map(reg => (
-            <div key={reg.id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col gap-3">
+            <div
+              key={reg.id}
+              className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col gap-3"
+            >
               <div className="flex justify-between items-start">
-                <div><h4 className="font-bold text-slate-800 flex items-center gap-2"><User size={16} className="text-slate-400"/>{reg.nome}</h4><span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">{reg.tipoAusencia || 'Ausência'}</span></div>
-                <div className="text-xs text-slate-500 text-right">{reg.timestamp?.toDate().toLocaleDateString()}<br/><span className="inline-flex items-center gap-1 mt-1"><Clock size={10}/> {reg.timestamp?.toDate().toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'})}</span></div>
+                <div>
+                  <h4 className="font-bold text-slate-800 flex items-center gap-2">
+                    <User size={16} className="text-slate-400"/>
+                    {reg.nome}
+                  </h4>
+                  <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">
+                    {reg.tipoAusencia || 'Ausência'}
+                  </span>
+                </div>
+                <div className="text-xs text-slate-500 text-right">
+                  {reg.timestamp?.toDate().toLocaleDateString()}
+                  <br/>
+                  <span className="inline-flex items-center gap-1 mt-1">
+                    <Clock size={10}/>
+                    {reg.timestamp?.toDate().toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'})}
+                  </span>
+                </div>
               </div>
-              <div className="bg-slate-50 p-3 rounded-lg text-sm text-slate-600 italic border border-slate-100">"{reg.justificativa}"</div>
+
+              <div className="bg-slate-50 p-3 rounded-lg text-sm text-slate-600 italic border border-slate-100">
+                "{reg.justificativa}"
+              </div>
+
               {reg.fotoBase64 && (
-                <div className="h-32 bg-slate-200 rounded-lg overflow-hidden relative cursor-pointer group" onClick={() => { const w = window.open(""); w.document.write(`<img src="${reg.fotoBase64}" style="max-width:100%"/>`); }}>
-                  <img src={reg.fotoBase64} className="w-full h-full object-cover" alt="Comprovante"/><div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-xs">Ver Comprovante</div>
+                <div
+                  className="h-32 bg-slate-200 rounded-lg overflow-hidden relative cursor-pointer group"
+                  onClick={() => {
+                    const w = window.open("");
+                    w.document.write(`<img src="${reg.fotoBase64}" style="max-width:100%"/>`);
+                  }}
+                >
+                  <img src={reg.fotoBase64} className="w-full h-full object-cover" alt="Comprovante"/>
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-xs">
+                    Ver Comprovante
+                  </div>
                 </div>
               )}
+
               <div className="grid grid-cols-2 gap-2 mt-2">
-                <button onClick={()=>handleRejeitar(reg.id)} className="p-2 text-red-600 border border-red-200 rounded hover:bg-red-50 text-sm font-bold">Rejeitar</button>
-                <button onClick={()=>setModalAbono(reg.id)} className="p-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 text-sm font-bold">Aprovar & Abonar</button>
+                <button
+                  onClick={()=>handleRejeitar(reg.id)}
+                  className="p-2 text-red-600 border border-red-200 rounded hover:bg-red-50 text-sm font-bold"
+                >
+                  Rejeitar
+                </button>
+                <button
+                  onClick={()=>setModalAbono(reg.id)}
+                  className="p-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 text-sm font-bold"
+                >
+                  Aprovar & Abonar
+                </button>
               </div>
             </div>
           ))}
         </div>
       )}
+
       {modalAbono && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white p-6 rounded-xl shadow-2xl w-full max-w-sm">
             <h3 className="font-bold text-lg mb-4">Abonar Horas</h3>
-            <p className="text-sm text-slate-600 mb-2">Quantas horas deseja abonar para esta ausência?</p>
-            <input type="time" value={horasAbono} onChange={e=>setHorasAbono(e.target.value)} className="w-full border p-3 rounded-lg text-xl text-center font-bold mb-6"/>
-            <div className="flex gap-3"><button onClick={()=>setModalAbono(null)} className="flex-1 py-3 text-slate-500 font-bold hover:bg-slate-50 rounded-lg">Cancelar</button><button onClick={handleAprovar} className="flex-1 py-3 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700">Confirmar</button></div>
+            <p className="text-sm text-slate-600 mb-2">
+              Quantas horas deseja abonar para esta ausência?
+            </p>
+            <input
+              type="time"
+              value={horasAbono}
+              onChange={e=>setHorasAbono(e.target.value)}
+              className="w-full border p-3 rounded-lg text-xl text-center font-bold mb-6"
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={()=>setModalAbono(null)}
+                className="flex-1 py-3 text-slate-500 font-bold hover:bg-slate-50 rounded-lg"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleAprovar}
+                className="flex-1 py-3 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700"
+              >
+                Confirmar
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -310,7 +689,7 @@ const ManagerAbsences = ({ registros }) => {
   );
 };
 
-// 4. RELATÓRIOS E ESPELHO (CORRIGIDO)
+// 4. RELATÓRIOS E ESPELHO
 const ManagerReports = ({ registros, funcionariosDb }) => {
   const [selectedFuncionario, setSelectedFuncionario] = useState("");
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
@@ -318,56 +697,125 @@ const ManagerReports = ({ registros, funcionariosDb }) => {
   const [relatorio, setRelatorio] = useState([]);
   const [resumo, setResumo] = useState({ trabalhadas: 0, saldo: 0, abonadas: 0 });
   const [editingDay, setEditingDay] = useState(null);
-  const [editTimes, setEditTimes] = useState({ entrada: '', saidaAlmoco: '', voltaAlmoco: '', saida: '' });
+  const [editTimes, setEditTimes] = useState({
+    entrada: '',
+    saidaAlmoco: '',
+    voltaAlmoco: '',
+    saida: ''
+  });
 
   useEffect(() => {
-    if(funcionariosDb.length > 0 && !selectedFuncionario) setSelectedFuncionario(funcionariosDb[0].nome);
+    if(funcionariosDb.length > 0 && !selectedFuncionario) {
+      setSelectedFuncionario(funcionariosDb[0].nome);
+    }
   }, [funcionariosDb, selectedFuncionario]);
 
   useEffect(() => {
     if(!selectedFuncionario) return;
+
     const dadosFunc = funcionariosDb.find(f => f.nome === selectedFuncionario);
+
     const getJornadaDia = (diaDaSemana) => {
       if (!dadosFunc) return 8;
-      const calc = (e, sa, va, s) => { const t = (timeToDecimal(sa) - timeToDecimal(e)) + (timeToDecimal(s) - timeToDecimal(va)); return t > 0 ? t : 0; };
-      if (diaDaSemana === 5 && dadosFunc.escala === '5x2') return calc(dadosFunc.entradaSexta, dadosFunc.saidaAlmocoSexta, dadosFunc.voltaAlmocoSexta, dadosFunc.saidaSexta);
-      if (diaDaSemana === 6 && dadosFunc.escala === '6x1') return calc(dadosFunc.entradaSexta, dadosFunc.saidaAlmocoSexta, dadosFunc.voltaAlmocoSexta, dadosFunc.saidaSexta);
-      return calc(dadosFunc.entrada, dadosFunc.saidaAlmoco, dadosFunc.voltaAlmoco, dadosFunc.saida);
+      const calc = (e, sa, va, s) => {
+        const t = (timeToDecimal(sa) - timeToDecimal(e)) + (timeToDecimal(s) - timeToDecimal(va));
+        return t > 0 ? t : 0;
+      };
+      if (diaDaSemana === 5 && dadosFunc.escala === '5x2') {
+        return calc(
+          dadosFunc.entradaSexta,
+          dadosFunc.saidaAlmocoSexta,
+          dadosFunc.voltaAlmocoSexta,
+          dadosFunc.saidaSexta
+        );
+      }
+      if (diaDaSemana === 6 && dadosFunc.escala === '6x1') {
+        return calc(
+          dadosFunc.entradaSexta,
+          dadosFunc.saidaAlmocoSexta,
+          dadosFunc.voltaAlmocoSexta,
+          dadosFunc.saidaSexta
+        );
+      }
+      return calc(
+        dadosFunc.entrada,
+        dadosFunc.saidaAlmoco,
+        dadosFunc.voltaAlmoco,
+        dadosFunc.saida
+      );
     };
 
     const dates = [];
     const date = new Date(selectedYear, selectedMonth, 1);
-    while (date.getMonth() === selectedMonth) { dates.push(new Date(date)); date.setDate(date.getDate() + 1); }
+    while (date.getMonth() === selectedMonth) {
+      dates.push(new Date(date));
+      date.setDate(date.getDate() + 1);
+    }
 
     let totalTrabalhado = 0, totalSaldo = 0, totalAbonado = 0;
 
     const processado = dates.map(d => {
       const dStr = d.toLocaleDateString('pt-BR');
-      const regDia = registros.filter(r => r.nome === selectedFuncionario && r.timestamp?.toDate().toLocaleDateString('pt-BR') === dStr);
+      const regDia = registros.filter(
+        r => r.nome === selectedFuncionario &&
+          r.timestamp?.toDate().toLocaleDateString('pt-BR') === dStr
+      );
+
       const entrada = regDia.find(r => r.tipo === 'Entrada');
       const saidaAlmoco = regDia.find(r => r.tipo === 'Saída Almoço');
       const voltaAlmoco = regDia.find(r => r.tipo === 'Entrada Almoço');
       const saida = regDia.find(r => r.tipo === 'Saída');
       const ausencia = regDia.find(r => r.action === 'ausencia' && r.status === 'Aprovado');
+
       let horasAbonadas = 0;
-      if (ausencia && ausencia.horasAbonadas) horasAbonadas = timeToDecimal(ausencia.horasAbonadas);
+      if (ausencia && ausencia.horasAbonadas) {
+        horasAbonadas = timeToDecimal(ausencia.horasAbonadas);
+      }
 
       let trabalhado = 0;
       const diffHours = (s, e) => (e - s) / 36e5;
+
       if (entrada && saida) {
-        if (saidaAlmoco && voltaAlmoco) trabalhado = diffHours(entrada.timestamp.toDate(), saidaAlmoco.timestamp.toDate()) + diffHours(voltaAlmoco.timestamp.toDate(), saida.timestamp.toDate());
-        else trabalhado = diffHours(entrada.timestamp.toDate(), saida.timestamp.toDate());
+        if (saidaAlmoco && voltaAlmoco) {
+          trabalhado =
+            diffHours(entrada.timestamp.toDate(), saidaAlmoco.timestamp.toDate()) +
+            diffHours(voltaAlmoco.timestamp.toDate(), saida.timestamp.toDate());
+        } else {
+          trabalhado = diffHours(entrada.timestamp.toDate(), saida.timestamp.toDate());
+        }
       }
 
       const diaSemana = d.getDay();
       const isWeekend = diaSemana === 0 || (diaSemana === 6 && dadosFunc?.escala === '5x2');
-      let jornadaEsperada = isWeekend ? 0 : getJornadaDia(diaSemana);
-      if (dadosFunc?.escala === '12x36') jornadaEsperada = trabalhado > 0 || horasAbonadas > 0 ? getJornadaDia(diaSemana) : 0;
-      
-      const saldo = (trabalhado + horasAbonadas) - jornadaEsperada;
-      if (!isWeekend || trabalhado > 0 || horasAbonadas > 0) { totalTrabalhado += trabalhado; totalAbonado += horasAbonadas; totalSaldo += saldo; }
 
-      return { date: d, entrada, saidaAlmoco, voltaAlmoco, saida, ausencia, trabalhado, abonado: horasAbonadas, saldo, isWeekend, jornadaEsperada };
+      let jornadaEsperada = isWeekend ? 0 : getJornadaDia(diaSemana);
+
+      // 12x36: só conta jornada quando houve plantão
+      if (dadosFunc?.escala === '12x36') {
+        jornadaEsperada = trabalhado > 0 || horasAbonadas > 0 ? getJornadaDia(diaSemana) : 0;
+      }
+
+      const saldo = (trabalhado + horasAbonadas) - jornadaEsperada;
+
+      if (!isWeekend || trabalhado > 0 || horasAbonadas > 0) {
+        totalTrabalhado += trabalhado;
+        totalAbonado += horasAbonadas;
+        totalSaldo += saldo;
+      }
+
+      return {
+        date: d,
+        entrada,
+        saidaAlmoco,
+        voltaAlmoco,
+        saida,
+        ausencia,
+        trabalhado,
+        abonado: horasAbonadas,
+        saldo,
+        isWeekend,
+        jornadaEsperada
+      };
     });
 
     setRelatorio(processado);
@@ -375,49 +823,134 @@ const ManagerReports = ({ registros, funcionariosDb }) => {
   }, [registros, selectedFuncionario, selectedMonth, selectedYear, funcionariosDb]);
 
   const openEditDay = (day) => {
-     setEditingDay(day);
-     setEditTimes({
-        entrada: day.entrada ? day.entrada.timestamp.toDate().toTimeString().slice(0,5) : '',
-        saidaAlmoco: day.saidaAlmoco ? day.saidaAlmoco.timestamp.toDate().toTimeString().slice(0,5) : '',
-        voltaAlmoco: day.voltaAlmoco ? day.voltaAlmoco.timestamp.toDate().toTimeString().slice(0,5) : '',
-        saida: day.saida ? day.saida.timestamp.toDate().toTimeString().slice(0,5) : '',
-     });
+    setEditingDay(day);
+    setEditTimes({
+      entrada: day.entrada
+        ? day.entrada.timestamp.toDate().toTimeString().slice(0,5)
+        : '',
+      saidaAlmoco: day.saidaAlmoco
+        ? day.saidaAlmoco.timestamp.toDate().toTimeString().slice(0,5)
+        : '',
+      voltaAlmoco: day.voltaAlmoco
+        ? day.voltaAlmoco.timestamp.toDate().toTimeString().slice(0,5)
+        : '',
+      saida: day.saida
+        ? day.saida.timestamp.toDate().toTimeString().slice(0,5)
+        : '',
+    });
   };
 
   const handleSaveEdit = async () => {
     if (!editingDay) return;
-    const { date } = editingDay;
-    const baseDate = new Date(date); 
-    const mapTipo = { entrada: 'Entrada', saidaAlmoco: 'Saída Almoço', voltaAlmoco: 'Entrada Almoço', saida: 'Saída' };
-    const items = [ {key:'entrada', tipo:mapTipo.entrada}, {key:'saidaAlmoco', tipo:mapTipo.saidaAlmoco}, {key:'voltaAlmoco', tipo:mapTipo.voltaAlmoco}, {key:'saida', tipo:mapTipo.saida} ];
+    const { date, entrada, saidaAlmoco, voltaAlmoco, saida } = editingDay;
+    const baseDate = new Date(date);
+
+    const mapTipo = {
+      entrada: 'Entrada',
+      saidaAlmoco: 'Saída Almoço',
+      voltaAlmoco: 'Entrada Almoço',
+      saida: 'Saída'
+    };
+
+    const items = [
+      { key: 'entrada', tipo: mapTipo.entrada },
+      { key: 'saidaAlmoco', tipo: mapTipo.saidaAlmoco },
+      { key: 'voltaAlmoco', tipo: mapTipo.voltaAlmoco },
+      { key: 'saida', tipo: mapTipo.saida },
+    ];
 
     for (const item of items) {
       const existingReg = editingDay[item.key];
       const valor = editTimes[item.key];
+
       if (valor) {
         const [h, m] = valor.split(':');
-        const newDate = new Date(baseDate); newDate.setHours(parseInt(h,10), parseInt(m,10), 0);
-        if (existingReg) { await updateDoc(doc(db, COLLECTION_REGISTROS, existingReg.id), { timestamp: Timestamp.fromDate(newDate), status: 'Ajuste Manual' }); } 
-        else { await addDoc(collection(db, COLLECTION_REGISTROS), { action: 'ponto', nome: selectedFuncionario, tipo: item.tipo, timestamp: Timestamp.fromDate(newDate), status: 'Ajuste Manual', latitude: 'Manual', longitude: 'Manual', fotoBase64: null }); }
-      } else { if (existingReg) await deleteDoc(doc(db, COLLECTION_REGISTROS, existingReg.id)); }
+        const newDate = new Date(baseDate);
+        newDate.setHours(parseInt(h, 10), parseInt(m, 10), 0);
+        if (existingReg) {
+          await updateDoc(doc(db, COLLECTION_REGISTROS, existingReg.id), {
+            timestamp: Timestamp.fromDate(newDate),
+            status: 'Ajuste Manual'
+          });
+        } else {
+          await addDoc(collection(db, COLLECTION_REGISTROS), {
+            action: 'ponto',
+            nome: selectedFuncionario,
+            tipo: item.tipo,
+            timestamp: Timestamp.fromDate(newDate),
+            status: 'Ajuste Manual',
+            latitude: 'Manual',
+            longitude: 'Manual',
+            fotoBase64: null
+          });
+        }
+      } else {
+        if (existingReg) {
+          await deleteDoc(doc(db, COLLECTION_REGISTROS, existingReg.id));
+        }
+      }
     }
+
     setEditingDay(null);
   };
 
   const handleApproveDay = async (dayData) => {
-    const recordsToApprove = [dayData.entrada, dayData.saidaAlmoco, dayData.voltaAlmoco, dayData.saida, dayData.ausencia].filter(r => r && r.id && r.status !== 'Aprovado');
-    if (recordsToApprove.length === 0) { alert("Não há registros pendentes neste dia."); return; }
-    if (!confirm(`Aprovar ${recordsToApprove.length} registros do dia ${dayData.date.toLocaleDateString('pt-BR')}?`)) return;
-    try { await Promise.all(recordsToApprove.map(r => updateDoc(doc(db, COLLECTION_REGISTROS, r.id), { status: 'Aprovado' }))); alert("Registros aprovados!"); } catch (e) { alert("Erro ao aprovar: " + e.message); }
+    const recordsToApprove = [
+      dayData.entrada,
+      dayData.saidaAlmoco,
+      dayData.voltaAlmoco,
+      dayData.saida,
+      dayData.ausencia
+    ].filter(r => r && r.id && r.status !== 'Aprovado');
+
+    if (recordsToApprove.length === 0) {
+      alert("Não há registros pendentes neste dia.");
+      return;
+    }
+    if (!confirm(
+      `Aprovar ${recordsToApprove.length} registros do dia ${dayData.date.toLocaleDateString('pt-BR')}?`
+    )) return;
+
+    try {
+      await Promise.all(
+        recordsToApprove.map(r =>
+          updateDoc(doc(db, COLLECTION_REGISTROS, r.id), { status: 'Aprovado' })
+        )
+      );
+      alert("Registros aprovados!");
+    } catch (e) {
+      alert("Erro ao aprovar: " + e.message);
+    }
   };
 
   const handleClearMonth = async () => {
-    const monthName = new Date(selectedYear, selectedMonth).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+    const monthName = new Date(selectedYear, selectedMonth)
+      .toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+
     const idsToDelete = [];
-    relatorio.forEach(day => { [day.entrada, day.saidaAlmoco, day.voltaAlmoco, day.saida, day.ausencia].forEach(reg => { if (reg && reg.id) idsToDelete.push(reg.id); }); });
-    if (idsToDelete.length === 0) { alert(`Não encontrei registros de ${selectedFuncionario} em ${monthName}.`); return; }
-    if (confirm(`ATENÇÃO: Apagar ${idsToDelete.length} registros de ${selectedFuncionario} em ${monthName}? ISSO É IRREVERSÍVEL. Já salvou o PDF?`)) {
-      try { await Promise.all(idsToDelete.map(id => deleteDoc(doc(db, COLLECTION_REGISTROS, id)))); alert("Registros apagados."); } catch (err) { alert("Erro: " + err.message); }
+    relatorio.forEach(day => {
+      [day.entrada, day.saidaAlmoco, day.voltaAlmoco, day.saida, day.ausencia]
+        .forEach(reg => {
+          if (reg && reg.id) idsToDelete.push(reg.id);
+        });
+    });
+
+    if (idsToDelete.length === 0) {
+      alert(`Não encontrei registros de ${selectedFuncionario} em ${monthName}.`);
+      return;
+    }
+
+    if (confirm(
+      `ATENÇÃO: Apagar ${idsToDelete.length} registros de ${selectedFuncionario} em ${monthName}? ISSO É IRREVERSÍVEL. Já salvou o PDF?`
+    )) {
+      try {
+        await Promise.all(idsToDelete.map(id =>
+          deleteDoc(doc(db, COLLECTION_REGISTROS, id))
+        ));
+        alert("Registros apagados.");
+      } catch (err) {
+        alert("Erro: " + err.message);
+      }
     }
   };
 
@@ -428,18 +961,81 @@ const ManagerReports = ({ registros, funcionariosDb }) => {
   return (
     <div className="space-y-6">
       <PrintStyles />
+
       <div className="print-only text-center mb-8">
         <h1 className="text-2xl font-bold text-black uppercase">Espelho de Ponto</h1>
-        <div className="flex justify-between mt-4 px-10 border-b pb-4"><p className="text-black font-medium">Funcionário: <strong>{selectedFuncionario}</strong></p><p className="text-black">Período: <strong>{new Date(selectedYear, selectedMonth).toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}</strong></p></div>
+        <div className="flex justify-between mt-4 px-10 border-b pb-4">
+          <p className="text-black font-medium">
+            Funcionário: <strong>{selectedFuncionario}</strong>
+          </p>
+          <p className="text-black">
+            Período:{" "}
+            <strong>
+              {new Date(selectedYear, selectedMonth)
+                .toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}
+            </strong>
+          </p>
+        </div>
       </div>
 
       <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-wrap gap-4 items-end no-print">
-        <div><label className="block text-xs font-bold text-slate-500 uppercase">Funcionário</label><select value={selectedFuncionario} onChange={e=>setSelectedFuncionario(e.target.value)} className="border p-2 rounded min-w-[180px]">{funcionariosDb.map(f=><option key={f.id} value={f.nome}>{f.nome}</option>)}</select></div>
-        <div><label className="block text-xs font-bold text-slate-500 uppercase">Mês</label><select value={selectedMonth} onChange={e=>setSelectedMonth(parseInt(e.target.value,10))} className="border p-2 rounded">{Array.from({length:12},(_,i)=><option key={i} value={i}>{new Date(0,i).toLocaleString('pt-BR',{month:'long'})}</option>)}</select></div>
-        <div><label className="block text-xs font-bold text-slate-500 uppercase">Ano</label><select value={selectedYear} onChange={e=>setSelectedYear(parseInt(e.target.value,10))} className="border p-2 rounded"><option value={2024}>2024</option><option value={2025}>2025</option></select></div>
+        <div>
+          <label className="block text-xs font-bold text-slate-500 uppercase">
+            Funcionário
+          </label>
+          <select
+            value={selectedFuncionario}
+            onChange={e=>setSelectedFuncionario(e.target.value)}
+            className="border p-2 rounded min-w-[180px]"
+          >
+            {funcionariosDb.map(f=>(
+              <option key={f.id} value={f.nome}>{f.nome}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-bold text-slate-500 uppercase">
+            Mês
+          </label>
+          <select
+            value={selectedMonth}
+            onChange={e=>setSelectedMonth(parseInt(e.target.value,10))}
+            className="border p-2 rounded"
+          >
+            {Array.from({length:12},(_,i)=>(
+              <option key={i} value={i}>
+                {new Date(0,i).toLocaleString('pt-BR',{month:'long'})}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-bold text-slate-500 uppercase">
+            Ano
+          </label>
+          <select
+            value={selectedYear}
+            onChange={e=>setSelectedYear(parseInt(e.target.value,10))}
+            className="border p-2 rounded"
+          >
+            <option value={2024}>2024</option>
+            <option value={2025}>2025</option>
+            <option value={2026}>2026</option>
+          </select>
+        </div>
         <div className="flex-1 text-right flex justify-end gap-2">
-          <button onClick={handleClearMonth} className="bg-red-50 text-red-600 border border-red-200 px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-red-100 transition"><Archive size={18} /> Limpar Mês</button>
-          <button onClick={handlePrint} className="bg-slate-800 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-slate-900 transition"><Download size={18} /> Exportar PDF</button>
+          <button
+            onClick={handleClearMonth}
+            className="bg-red-50 text-red-600 border border-red-200 px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-red-100 transition"
+          >
+            <Archive size={18} /> Limpar Mês
+          </button>
+          <button
+            onClick={handlePrint}
+            className="bg-slate-800 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-slate-900 transition"
+          >
+            <Download size={18} /> Exportar PDF
+          </button>
         </div>
       </div>
 
