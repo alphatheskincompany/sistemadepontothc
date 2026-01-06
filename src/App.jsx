@@ -15,7 +15,7 @@ import {
   updateDoc, 
   doc, 
   deleteDoc,
-  getDocs, // Adicionado para buscar histórico
+  getDocs, // Importante para buscar histórico
   serverTimestamp,
   Timestamp 
 } from 'firebase/firestore';
@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 
 // =================================================================================
-// ⬇️ SUAS CHAVES DO FIREBASE (CONFIGURADAS) ⬇️
+// ⬇️ SUAS CHAVES DO FIREBASE ⬇️
 // =================================================================================
 
 const firebaseConfig = {
@@ -170,26 +170,11 @@ const ManagerEmployees = () => {
     }
   };
 
-  const handleOpenEdit = (func) => {
-    setEditingFunc({ ...func });
-  };
-
-  const handleEditChange = (field, value) => {
-    setEditingFunc(prev => ({ ...prev, [field]: value }));
-  };
-
-  const handleSalvarEdicao = async () => {
-    if (!editingFunc || !editingFunc.id) return;
-    await updateDoc(doc(db, COLLECTION_FUNCIONARIOS, editingFunc.id), {
-      ...editingFunc
-    });
-    setEditingFunc(null);
-  };
-
+  // --- NOVA FUNÇÃO: SINCRONIZAR DO HISTÓRICO ---
   const handleSyncFromHistory = async () => {
     setLoadingSync(true);
     try {
-      // 1. Buscar todos os registros de ponto
+      // 1. Busca todos os registros de ponto já feitos
       const snapshot = await getDocs(collection(db, COLLECTION_REGISTROS));
       const nomesNoHistorico = new Set();
       snapshot.forEach(doc => {
@@ -197,7 +182,7 @@ const ManagerEmployees = () => {
         if (data.nome) nomesNoHistorico.add(data.nome);
       });
 
-      // 2. Identificar quais nomes NÃO estão na lista atual de funcionários
+      // 2. Compara com os que já estão cadastrados
       const nomesAtuais = new Set(funcionarios.map(f => f.nome));
       const nomesParaAdicionar = [...nomesNoHistorico].filter(nome => !nomesAtuais.has(nome));
 
@@ -212,7 +197,7 @@ const ManagerEmployees = () => {
         return;
       }
 
-      // 3. Cadastrar os faltantes
+      // 3. Cadastra automaticamente
       const promises = nomesParaAdicionar.map(nome => 
         addDoc(collection(db, COLLECTION_FUNCIONARIOS), {
           nome: nome,
@@ -230,6 +215,22 @@ const ManagerEmployees = () => {
     } finally {
       setLoadingSync(false);
     }
+  };
+
+  const handleOpenEdit = (func) => {
+    setEditingFunc({ ...func });
+  };
+
+  const handleEditChange = (field, value) => {
+    setEditingFunc(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleSalvarEdicao = async () => {
+    if (!editingFunc || !editingFunc.id) return;
+    await updateDoc(doc(db, COLLECTION_FUNCIONARIOS, editingFunc.id), {
+      ...editingFunc
+    });
+    setEditingFunc(null);
   };
 
   const calcularHorasSemanais = (cfg) => {
@@ -265,7 +266,7 @@ const ManagerEmployees = () => {
       <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl flex items-center justify-between">
         <div>
           <h4 className="font-bold text-blue-800 text-sm">Recuperação de Histórico</h4>
-          <p className="text-xs text-blue-600">Se os registros antigos não aparecem, clique aqui para re-cadastrar os funcionários automaticamente.</p>
+          <p className="text-xs text-blue-600">Se os registros antigos não aparecem, clique aqui para cadastrar os nomes automaticamente.</p>
         </div>
         <button 
           onClick={handleSyncFromHistory} 
@@ -1269,8 +1270,8 @@ const EmployeeApp = ({ onGoToManager }) => {
   };
 
   if(view==='camera') return <div className="fixed inset-0 bg-black flex flex-col"><video ref={videoRef} autoPlay playsInline className="flex-1 object-cover"/><canvas ref={canvasRef} className="hidden"/><button onClick={takePhoto} className="absolute bottom-8 left-1/2 -translate-x-1/2 w-20 h-20 bg-white rounded-full border-4 border-slate-300"/></div>;
-  if(view==='processing' || loading) return <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50"><Loader2 className="animate-spin text-blue-600 w-10 h-10 mb-3"/><p className="text-slate-500 text-sm">Enviando seu registro...</p></div>;
-  if(view==='success') return <div className="min-h-screen flex flex-col items-center justify-center bg-emerald-50"><CheckCircle className="w-16 h-16 text-emerald-600 mb-3"/><p className="font-bold text-emerald-700 text-lg">Registro enviado com sucesso!</p></div>;
+  if(view==='processing' || loading) return <div className="min-h-screen flex items-center justify-center bg-slate-50"><Loader2 className="animate-spin text-blue-600 w-10 h-10 mb-3"/><p className="text-slate-500 text-sm">Enviando seu registro...</p></div>;
+  if(view==='success') return <div className="min-h-screen flex items-center justify-center bg-emerald-50"><CheckCircle className="w-16 h-16 text-emerald-600 mb-3"/><p className="font-bold text-emerald-700 text-lg">Registro enviado com sucesso!</p></div>;
 
   if(view==='form-ponto' || view==='form-ausencia') {
     const isPonto = view === 'form-ponto';
