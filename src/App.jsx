@@ -15,11 +15,12 @@ import {
   updateDoc, 
   doc, 
   deleteDoc,
+  getDocs, // Adicionado para buscar histórico
   serverTimestamp,
   Timestamp 
 } from 'firebase/firestore';
 import { 
-  MapPin, User, FileText, CheckCircle, XCircle, Clock, LogOut, Shield, Search, AlertTriangle, Loader2, Users, Briefcase, Plus, Trash2, Save, Edit, Calendar, X, Printer, Download, Archive 
+  MapPin, User, FileText, CheckCircle, XCircle, Clock, LogOut, Shield, Search, AlertTriangle, Loader2, Users, Briefcase, Plus, Trash2, Save, Edit, Calendar, X, Printer, Download, Archive, RefreshCw 
 } from 'lucide-react';
 
 // =================================================================================
@@ -141,6 +142,7 @@ const ManagerEmployees = () => {
     entradaSexta: '08:00', saidaAlmocoSexta: '12:00', voltaAlmocoSexta: '13:00', saidaSexta: '17:00'
   });
   const [editingFunc, setEditingFunc] = useState(null);
+  const [loadingSync, setLoadingSync] = useState(false);
 
   useEffect(() => {
     const q = query(collection(db, COLLECTION_FUNCIONARIOS), orderBy('nome'));
@@ -184,6 +186,52 @@ const ManagerEmployees = () => {
     setEditingFunc(null);
   };
 
+  const handleSyncFromHistory = async () => {
+    setLoadingSync(true);
+    try {
+      // 1. Buscar todos os registros de ponto
+      const snapshot = await getDocs(collection(db, COLLECTION_REGISTROS));
+      const nomesNoHistorico = new Set();
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        if (data.nome) nomesNoHistorico.add(data.nome);
+      });
+
+      // 2. Identificar quais nomes NÃO estão na lista atual de funcionários
+      const nomesAtuais = new Set(funcionarios.map(f => f.nome));
+      const nomesParaAdicionar = [...nomesNoHistorico].filter(nome => !nomesAtuais.has(nome));
+
+      if (nomesParaAdicionar.length === 0) {
+        alert("Todos os funcionários do histórico já estão cadastrados.");
+        setLoadingSync(false);
+        return;
+      }
+
+      if (!confirm(`Encontrei ${nomesParaAdicionar.length} nomes no histórico que não estão cadastrados:\n\n${nomesParaAdicionar.join(', ')}\n\nDeseja cadastrá-los agora para recuperar os dados?`)) {
+        setLoadingSync(false);
+        return;
+      }
+
+      // 3. Cadastrar os faltantes
+      const promises = nomesParaAdicionar.map(nome => 
+        addDoc(collection(db, COLLECTION_FUNCIONARIOS), {
+          nome: nome,
+          escala: '5x2', // Padrão
+          entrada: '08:00', saidaAlmoco: '12:00', voltaAlmoco: '13:00', saida: '18:00',
+          entradaSexta: '08:00', saidaAlmocoSexta: '12:00', voltaAlmocoSexta: '13:00', saidaSexta: '17:00'
+        })
+      );
+
+      await Promise.all(promises);
+      alert("Funcionários restaurados e sincronizados com sucesso!");
+
+    } catch (e) {
+      alert("Erro ao sincronizar: " + e.message);
+    } finally {
+      setLoadingSync(false);
+    }
+  };
+
   const calcularHorasSemanais = (cfg) => {
     const base = cfg || novoFunc;
     const calcDia = (e, sa, va, s) => {
@@ -213,6 +261,22 @@ const ManagerEmployees = () => {
 
   return (
     <div className="space-y-6 no-print">
+      {/* BOTÃO DE SINCRONIZAÇÃO */}
+      <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl flex items-center justify-between">
+        <div>
+          <h4 className="font-bold text-blue-800 text-sm">Recuperação de Histórico</h4>
+          <p className="text-xs text-blue-600">Se os registros antigos não aparecem, clique aqui para re-cadastrar os funcionários automaticamente.</p>
+        </div>
+        <button 
+          onClick={handleSyncFromHistory} 
+          disabled={loadingSync}
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-blue-700 transition flex items-center gap-2"
+        >
+          {loadingSync ? <Loader2 className="animate-spin" size={16}/> : <RefreshCw size={16}/>}
+          Sincronizar Nomes
+        </button>
+      </div>
+
       {/* CARD NOVO CADASTRO */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
         <div className="flex justify-between items-center mb-4">
@@ -403,7 +467,7 @@ const ManagerEmployees = () => {
             {funcionarios.length === 0 && (
               <tr>
                 <td colSpan={4} className="p-4 text-center text-slate-400">
-                  Nenhum funcionário cadastrado.
+                  Nenhum funcionário cadastrado. Use o botão acima para sincronizar.
                 </td>
               </tr>
             )}
@@ -1218,7 +1282,7 @@ const EmployeeApp = ({ onGoToManager }) => {
             <p className="text-xs text-slate-500">Preencha seus dados e tire uma foto para validar o registro.</p>
             <select value={formData.nome} onChange={e=>setFormData(prev=>({...prev, nome:e.target.value}))} className="w-full border p-3 rounded focus:outline-none focus:ring-1 focus:ring-blue-500">
               <option value="">Selecione seu nome...</option>
-              {funcionarios.map(f=><option key={f} value={f}>{f}</option>)}
+              {funcionarios.map(f=><option key={f.id} value={f.nome}>{f.nome}</option>)}
             </select>
             {isPonto ? (
               <div className="grid gap-2">{['Entrada','Saída Almoço','Entrada Almoço','Saída'].map(t=><label key={t} className={`p-3 border rounded flex items-center cursor-pointer ${formData.tipo===t ? 'border-blue-500 bg-blue-50' : ''}`}><input type="radio" name="tp" checked={formData.tipo===t} onChange={()=>setFormData(prev=>({...prev, tipo:t, justificativa:''}))} className="mr-2"/>{t}</label>)}</div>
